@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -25,7 +25,7 @@ pub struct UserLogin {
 }
 
 #[derive(Serialize)]
-struct TokenResponse {
+struct TokensResponse {
     jwt_token: String,
     refresh_token: String,
 }
@@ -61,7 +61,7 @@ pub async fn register(
             let jwt_token = crypt::token::make_jwt_token(id);
             let refresh_token = crypt::token::make_refresh_token(id);
 
-            let resp = TokenResponse {
+            let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
             };
@@ -118,7 +118,7 @@ pub async fn login(
             let jwt_token = crypt::token::make_jwt_token(user_id);
             let refresh_token = crypt::token::make_refresh_token(user_id);
 
-            let resp = TokenResponse {
+            let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
             };
@@ -136,4 +136,33 @@ pub async fn login(
                 .into_response());
         }
     }
+}
+
+pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
+    if let Some(authorization) = headers.get(AUTHORIZATION) {
+        let refresh_tkn = authorization
+            .to_str()
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap_or("fuck");
+        match crypt::token::verify_refresh_token(refresh_tkn) {
+            Ok(id) => {
+                let jwt_token = crypt::token::make_jwt_token(id);
+                return Ok((StatusCode::OK, jwt_token.to_string()).into_response());
+            }
+            Err(why) => {
+                eprintln!("Error verify refresh: {}", why);
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(AuthError::new(
+                        AuthErrors::RefreshTokenExpired,
+                        "Please, log in again",
+                    )),
+                )
+                    .into_response());
+            }
+        }
+    }
+    return Err((StatusCode::BAD_REQUEST, "No token in headers".to_string()).into_response());
 }

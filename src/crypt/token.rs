@@ -8,11 +8,11 @@ const SECRET_WORD: &str = "vladivostok"; // TODO: make it env
 
 #[derive(Serialize, Deserialize)]
 struct Claims {
-    id: i32,
+    id: u32,
     exp: i64,
 }
 
-pub fn make_jwt_token(user_id: i32) -> String {
+pub fn make_jwt_token(user_id: u32) -> String {
     let claims = Claims {
         id: user_id,
         exp: (Utc::now() + Duration::hours(1)).timestamp(),
@@ -25,7 +25,7 @@ pub fn make_jwt_token(user_id: i32) -> String {
     .unwrap()
 }
 
-pub fn make_refresh_token(user_id: i32) -> String {
+pub fn make_refresh_token(user_id: u32) -> String {
     let claims = Claims {
         id: user_id,
         exp: (Utc::now() + Duration::days(7)).timestamp(),
@@ -38,7 +38,7 @@ pub fn make_refresh_token(user_id: i32) -> String {
     .unwrap()
 }
 
-pub fn verify_refresh_token(token: &str) -> anyhow::Result<i32> {
+pub fn verify_refresh_token(token: &str) -> anyhow::Result<u32> {
     let validation = Validation::default();
     let claims = decode::<Claims>(
         token,
@@ -48,7 +48,7 @@ pub fn verify_refresh_token(token: &str) -> anyhow::Result<i32> {
     Ok(claims.claims.id)
 }
 
-pub fn verify_jwt_token(token: &str) -> anyhow::Result<i32> {
+pub fn verify_jwt_token(token: &str) -> anyhow::Result<u32> {
     let validation = Validation::default();
     let claims = decode::<Claims>(
         token,
