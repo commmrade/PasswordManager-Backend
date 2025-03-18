@@ -38,3 +38,21 @@ impl Display for AuthErrors {
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub enum StorageErrors {
+    None,
+}
+impl Display for StorageErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "none"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct StorageError {
+    error_type: StorageErrors,
+    message: String,
+}

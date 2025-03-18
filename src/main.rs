@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use axum::{routing::get, routing::post, Router};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{get, post},
+    Router,
+};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
 
 pub mod controllers;
@@ -24,6 +28,8 @@ async fn main() {
         .route("/register", post(handlers::auth::register))
         .route("/login", post(handlers::auth::login))
         .route("/token", get(handlers::auth::token))
+        .route("/upload", post(handlers::storage::upload))
+        .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024 * 2))
         .with_state(mysql_pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
