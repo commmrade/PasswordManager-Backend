@@ -24,7 +24,6 @@ pub struct UploadReq {
     password: String,
 }
 
-#[axum::debug_handler]
 pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Response, Response> {
     let empty = HeaderValue::from_str("").unwrap();
     let token = headers
@@ -35,7 +34,6 @@ pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Resp
         .split_whitespace()
         .nth(1)
         .expect("Token is not set");
-    println!("here");
     let password_of_storage = headers
         .get("Password")
         .unwrap_or(&empty)
