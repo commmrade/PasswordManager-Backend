@@ -28,8 +28,8 @@ async fn main() {
         .route("/register", post(handlers::auth::register))
         .route("/login", post(handlers::auth::login))
         .route("/token", get(handlers::auth::token))
-        .route("/upload", post(handlers::storage::upload))
         .route("/download", get(handlers::storage::download))
+        .route("/upload", post(handlers::storage::upload))
         .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024 * 2))
         .with_state(mysql_pool);
 

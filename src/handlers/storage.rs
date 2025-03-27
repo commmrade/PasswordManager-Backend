@@ -107,6 +107,7 @@ pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Resp
 
 pub async fn download(headers: HeaderMap) -> Result<impl IntoResponse, (StatusCode, String)> {
     let empty = HeaderValue::from_str("").unwrap();
+
     let token = headers
         .get("Authorization")
         .unwrap_or(&empty)
