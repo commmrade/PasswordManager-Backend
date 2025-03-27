@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
-use crate::{controllers::userdb, crypt};
+use crate::{controllers::userdb, crypt::{self, token}};
 
 use super::types::{AuthError, AuthErrors};
 
@@ -145,7 +145,7 @@ pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
             .unwrap()
             .split_whitespace()
             .nth(1)
-            .unwrap_or("fuck");
+            .unwrap_or("");
         match crypt::token::verify_refresh_token(refresh_tkn) {
             Ok(id) => {
                 let jwt_token = crypt::token::make_jwt_token(id);
@@ -165,4 +165,22 @@ pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
         }
     }
     return Err((StatusCode::BAD_REQUEST, "No token in headers".to_string()).into_response());
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct QueryValidate {
+    token: String,
+} 
+
+pub async fn validate(
+    Query(data) : Query<QueryValidate>
+) -> Result<Response, Response> {
+    match token::verify_jwt_token(&data.token) {
+        Ok(_) => return Ok((StatusCode::OK, "Token was verified").into_response()),
+        Err(why) => {
+            eprintln!("Error {}", why);
+            return Err((StatusCode::UNAUTHORIZED, "Token was not verified").into_response());
+        }
+    };
 }

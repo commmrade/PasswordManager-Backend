@@ -30,6 +30,7 @@ async fn main() {
         .route("/token", get(handlers::auth::token))
         .route("/download", get(handlers::storage::download))
         .route("/upload", post(handlers::storage::upload))
+        .route("/validate", get(handlers::auth::validate))
         .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024 * 2))
         .with_state(mysql_pool);
 

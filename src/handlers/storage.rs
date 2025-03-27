@@ -34,7 +34,7 @@ pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Resp
         .unwrap()
         .split_whitespace()
         .nth(1)
-        .expect("Token is not set");
+        .unwrap_or("");
     let password_of_storage = headers
         .get("Password")
         .unwrap_or(&empty)
@@ -115,8 +115,8 @@ pub async fn download(headers: HeaderMap) -> Result<impl IntoResponse, (StatusCo
         .unwrap()
         .split_whitespace()
         .nth(1)
-        .expect("Token is not set");
-
+        .unwrap_or("");
+    println!("down");
     let user_id = match token::verify_jwt_token(token) {
         Ok(id) => id,
         Err(why) => {
