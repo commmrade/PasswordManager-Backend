@@ -35,7 +35,6 @@ pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Resp
         .split_whitespace()
         .nth(1)
         .expect("Token is not set");
-    println!("here");
     let password_of_storage = headers
         .get("Password")
         .unwrap_or(&empty)
