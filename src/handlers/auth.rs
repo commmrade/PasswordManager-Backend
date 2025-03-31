@@ -7,7 +7,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
-use crate::{controllers::userdb, crypt::{self, token}};
+use crate::{
+    controllers::userdb,
+    crypt::{self, token},
+};
 
 use super::types::{AuthError, AuthErrors};
 
@@ -117,7 +120,6 @@ pub async fn login(
         Ok(()) => {
             let jwt_token = crypt::token::make_jwt_token(user_id);
             let refresh_token = crypt::token::make_refresh_token(user_id);
-
             let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
@@ -167,15 +169,12 @@ pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
     return Err((StatusCode::BAD_REQUEST, "No token in headers".to_string()).into_response());
 }
 
-
 #[derive(Serialize, Deserialize)]
 pub struct QueryValidate {
     token: String,
-} 
+}
 
-pub async fn validate(
-    Query(data) : Query<QueryValidate>
-) -> Result<Response, Response> {
+pub async fn validate(Query(data): Query<QueryValidate>) -> Result<Response, Response> {
     match token::verify_jwt_token(&data.token) {
         Ok(_) => return Ok((StatusCode::OK, "Token was verified").into_response()),
         Err(why) => {
