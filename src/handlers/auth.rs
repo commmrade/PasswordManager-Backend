@@ -7,14 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
-<<<<<<< HEAD
 use crate::{controllers::{tokendb, userdb}, crypt::{self, token}};
-=======
-use crate::{
-    controllers::userdb,
-    crypt::{self, token},
-};
->>>>>>> 38abf95493e2d8057347d8ca958f09f92fd4c3c8
 
 use super::types::{AuthError, AuthErrors};
 
@@ -126,12 +119,9 @@ pub async fn login(
         Ok(()) => {
             let jwt_token = crypt::token::make_jwt_token(user_id);
             let refresh_token = crypt::token::make_refresh_token(user_id);
-<<<<<<< HEAD
 
             tokendb::create_token(&pool, user_id, &refresh_token).await.unwrap();
 
-=======
->>>>>>> 38abf95493e2d8057347d8ca958f09f92fd4c3c8
             let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
