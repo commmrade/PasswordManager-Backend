@@ -150,6 +150,17 @@ pub async fn token(State(pool): State<MySqlPool>, headers: HeaderMap) -> Result<
             .split_whitespace()
             .nth(1)
             .unwrap_or("");
+
+        if !tokendb::token_exists(&pool, refresh_tkn).await {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(AuthError::new(
+                    AuthErrors::RefreshTokenExpired,
+                    "Please, log in again",
+                )),
+            )
+                .into_response());
+        } 
         match crypt::token::verify_refresh_token(refresh_tkn) {
             Ok(id) => {
                 let jwt_token = crypt::token::make_jwt_token(id);
