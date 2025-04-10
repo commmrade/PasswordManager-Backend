@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use handlers::auth;
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
 
 pub mod controllers;
@@ -31,6 +32,7 @@ async fn main() {
         .route("/download", get(handlers::storage::download))
         .route("/upload", post(handlers::storage::upload))
         .route("/validate", get(handlers::auth::validate))
+        .route("/logout", post(auth::logout))
         .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024 * 2))
         .with_state(mysql_pool);
 

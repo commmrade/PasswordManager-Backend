@@ -7,19 +7,13 @@ pub async fn create_user(
     email: &str,
     password_hash: &str,
 ) -> anyhow::Result<u32> {
-    sqlx::query("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)")
+    let row = sqlx::query("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)")
         .bind(username)
         .bind(email)
         .bind(password_hash)
         .execute(pool)
         .await?;
-
-    let user_id = sqlx::query("SELECT LAST_INSERT_ID()")
-        .fetch_one(pool)
-        .await?
-        .try_get::<u64, _>(0)?;
-
-    Ok(user_id as u32)
+    Ok(row.last_insert_id() as u32)
 }
 
 pub async fn id_by_email(pool: &MySqlPool, email: &str) -> anyhow::Result<u32> {

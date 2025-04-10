@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
-use crate::{controllers::userdb, crypt::{self, token}};
+use crate::{controllers::{tokendb, userdb}, crypt::{self, token}};
 
 use super::types::{AuthError, AuthErrors};
 
@@ -60,6 +60,8 @@ pub async fn register(
         Ok(id) => {
             let jwt_token = crypt::token::make_jwt_token(id);
             let refresh_token = crypt::token::make_refresh_token(id);
+
+            tokendb::create_token(&pool, id, &refresh_token).await.unwrap();
 
             let resp = TokensResponse {
                 jwt_token,
@@ -118,6 +120,8 @@ pub async fn login(
             let jwt_token = crypt::token::make_jwt_token(user_id);
             let refresh_token = crypt::token::make_refresh_token(user_id);
 
+            tokendb::create_token(&pool, user_id, &refresh_token).await.unwrap();
+
             let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
@@ -138,7 +142,7 @@ pub async fn login(
     }
 }
 
-pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
+pub async fn token(State(pool): State<MySqlPool>, headers: HeaderMap) -> Result<Response, Response> {
     if let Some(authorization) = headers.get(AUTHORIZATION) {
         let refresh_tkn = authorization
             .to_str()
@@ -152,7 +156,9 @@ pub async fn token(headers: HeaderMap) -> Result<Response, Response> {
                 return Ok((StatusCode::OK, jwt_token.to_string()).into_response());
             }
             Err(why) => {
+
                 eprintln!("Error verify refresh: {}", why);
+                tokendb::delete_token(&pool, refresh_tkn).await.unwrap();
                 return Err((
                     StatusCode::FORBIDDEN,
                     Json(AuthError::new(
@@ -183,4 +189,16 @@ pub async fn validate(
             return Err((StatusCode::UNAUTHORIZED, "Token was not verified").into_response());
         }
     };
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LogoutBody {
+    refresh_token: String
+}
+
+pub async fn logout(State(pool): State<MySqlPool>, Json(data) : Json<LogoutBody>) -> Result<Response, Response> {
+    if let Err(why) = tokendb::delete_token(&pool, &data.refresh_token).await {
+        eprintln!("Err deleting rtoken: {}", why);
+    }
+    Ok((StatusCode::OK, "Error deleting").into_response())
 }
