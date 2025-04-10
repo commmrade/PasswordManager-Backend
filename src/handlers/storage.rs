@@ -1,14 +1,12 @@
 use std::{fs::OpenOptions, io::Write};
 
 use axum::{
-    body::Body,
-    extract::{multipart, Multipart, Query, State},
+    extract::{Multipart, State},
     http::{
         header::{CONTENT_DISPOSITION, CONTENT_TYPE},
         HeaderMap, HeaderValue, StatusCode,
     },
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
@@ -17,7 +15,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 const STORAGE_FILENAME: &str = "pmanager.pm";
 const PASSWORD_FILENAME: &str = "password.txt";
 
-use crate::crypt::token;
+use crate::{
+    controllers::userdb,
+    crypt::{encryption, token},
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct UploadReq {
@@ -25,7 +26,11 @@ pub struct UploadReq {
 }
 
 #[axum::debug_handler]
-pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Response, Response> {
+pub async fn upload(
+    State(pool): State<MySqlPool>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Response, Response> {
     let empty = HeaderValue::from_str("").unwrap();
     let token = headers
         .get("Authorization")
@@ -99,13 +104,23 @@ pub async fn upload(headers: HeaderMap, mut multipart: Multipart) -> Result<Resp
         Ok(file) => file,
         Err(why) => return Err(why.into_response()),
     };
-    file.write(password_of_storage.as_bytes()).unwrap();
+
+    // TODO: Make it safer
+    let encrypted = encryption::aes_encrypt_text(password_of_storage).unwrap();
+    userdb::set_nonce(&pool, &encrypted.1, user_id)
+        .await
+        .unwrap();
+
+    file.write(encrypted.0.as_slice()).unwrap();
     file.flush().unwrap();
 
     Ok((StatusCode::OK, "Successfully uploaded storage").into_response())
 }
 
-pub async fn download(headers: HeaderMap) -> Result<impl IntoResponse, (StatusCode, String)> {
+pub async fn download(
+    State(pool): State<MySqlPool>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     let empty = HeaderValue::from_str("").unwrap();
 
     let token = headers
@@ -125,17 +140,19 @@ pub async fn download(headers: HeaderMap) -> Result<impl IntoResponse, (StatusCo
         }
     };
 
-    let mut password_str = String::new();
+    let path = user_id.to_string() + "/" + PASSWORD_FILENAME;
+    let mut file = match tokio::fs::File::open(path).await {
+        Ok(file) => file,
+        Err(why) => return Err((StatusCode::NOT_FOUND, why.to_string())),
+    };
+    let mut raw_password_str = Vec::new();
+    file.read_to_end(&mut raw_password_str).await.unwrap();
 
-    {
-        let path = user_id.to_string() + "/" + PASSWORD_FILENAME;
-        let mut file = match tokio::fs::File::open(path).await {
-            Ok(file) => file,
-            Err(why) => return Err((StatusCode::NOT_FOUND, why.to_string())),
-        };
-        file.read_to_string(&mut password_str).await.unwrap();
-        file.flush().await.unwrap();
-    }
+    let nonce = userdb::nonce(&pool, user_id).await.unwrap(); // Must exist because user at this point is there
+    let password_str = encryption::aes_decrypt_text(&raw_password_str, &nonce).unwrap();
+
+    file.flush().await.unwrap();
+    drop(file);
 
     let path = user_id.to_string() + "/" + STORAGE_FILENAME;
     let file = match tokio::fs::File::open(path).await {

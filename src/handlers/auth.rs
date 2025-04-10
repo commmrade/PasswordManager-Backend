@@ -7,7 +7,14 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
+<<<<<<< HEAD
 use crate::{controllers::{tokendb, userdb}, crypt::{self, token}};
+=======
+use crate::{
+    controllers::userdb,
+    crypt::{self, token},
+};
+>>>>>>> 38abf95493e2d8057347d8ca958f09f92fd4c3c8
 
 use super::types::{AuthError, AuthErrors};
 
@@ -119,9 +126,12 @@ pub async fn login(
         Ok(()) => {
             let jwt_token = crypt::token::make_jwt_token(user_id);
             let refresh_token = crypt::token::make_refresh_token(user_id);
+<<<<<<< HEAD
 
             tokendb::create_token(&pool, user_id, &refresh_token).await.unwrap();
 
+=======
+>>>>>>> 38abf95493e2d8057347d8ca958f09f92fd4c3c8
             let resp = TokensResponse {
                 jwt_token,
                 refresh_token,
@@ -173,15 +183,12 @@ pub async fn token(State(pool): State<MySqlPool>, headers: HeaderMap) -> Result<
     return Err((StatusCode::BAD_REQUEST, "No token in headers".to_string()).into_response());
 }
 
-
 #[derive(Serialize, Deserialize)]
 pub struct QueryValidate {
     token: String,
-} 
+}
 
-pub async fn validate(
-    Query(data) : Query<QueryValidate>
-) -> Result<Response, Response> {
+pub async fn validate(Query(data): Query<QueryValidate>) -> Result<Response, Response> {
     match token::verify_jwt_token(&data.token) {
         Ok(_) => return Ok((StatusCode::OK, "Token was verified").into_response()),
         Err(why) => {
