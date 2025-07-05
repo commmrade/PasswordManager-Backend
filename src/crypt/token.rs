@@ -13,7 +13,7 @@ struct Claims {
 pub fn make_jwt_token(user_id: u32) -> String {
     let claims = Claims {
         id: user_id,
-        exp: (Utc::now() + Duration::hours(4)).timestamp(),
+        exp: (Utc::now() + Duration::hours(1)).timestamp(),
     };
     jsonwebtoken::encode(
         &Header::default(),

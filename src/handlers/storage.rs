@@ -139,6 +139,7 @@ pub async fn download(
             return Err((StatusCode::UNAUTHORIZED, "Token was not verified".into()));
         }
     };
+    println!("past");
 
     let path = user_id.to_string() + "/" + PASSWORD_FILENAME;
     let mut file = match tokio::fs::File::open(path).await {
