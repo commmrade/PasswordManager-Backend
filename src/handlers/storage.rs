@@ -3,25 +3,20 @@ use std::{fs::OpenOptions, io::Write};
 use axum::{
     extract::{Multipart, State},
     http::{
-        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
-        HeaderMap, HeaderValue, StatusCode,
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE}, HeaderMap, HeaderValue, StatusCode
     },
     response::{IntoResponse, Response},
 };
 use minio::s3::{
-    builders::ObjectContent,
     types::{PartInfo, S3Api},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::MySqlPool;
-use tokio_util::io::ReaderStream;
 
 const STORAGE_FILENAME: &str = "pmanager.pm";
 
 use crate::{
     common::error::{error_response, AppError, ErrorTypes},
     crypt::token::AuthHeader,
-    AppState,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -35,8 +30,7 @@ pub async fn upload(
     mut multipart: Multipart,
 ) -> Result<Response, AppError> {
     let user_id = auth_header.claims.id;
-
-    let filename = user_id.to_string() + "/pmanager.pm";
+    let filename = format!("{}/{}", user_id, STORAGE_FILENAME);
 
     while let Some(mut field) = multipart.next_field().await? {
         let multipart_upload = s3_client
@@ -51,7 +45,7 @@ pub async fn upload(
                     &multipart_upload.bucket,
                     &multipart_upload.object,
                     &multipart_upload.upload_id,
-                    (parts.len() + 1) as u16, // Indexing of parts start at 1
+                    (parts.len() + 1) as u16, // Indexing of parts starts at 1
                     chunk.clone().into(),
                 )
                 .send()
@@ -83,8 +77,8 @@ pub async fn download(
     auth_header: AuthHeader,
 ) -> Result<Response, AppError> {
     let user_id = auth_header.claims.id;
+    let filename = format!("{}/{}", user_id, STORAGE_FILENAME);
 
-    let filename = user_id.to_string() + "/pmanager.pm";
     let response = match s3_client
         .get_object("user-storages", &filename)
         .send()
@@ -105,18 +99,9 @@ pub async fn download(
     let (stream, _size) = response.content.to_stream().await?;
     let body = axum::body::Body::from_stream(stream);
 
-    let response = axum::response::Response::builder()
-        .header(
-            CONTENT_TYPE,
-            HeaderValue::from_str("application/vnd.sqlite3").unwrap(),
-        )
-        .header(
-            CONTENT_DISPOSITION,
-            HeaderValue::from_str(
-                format!("form-data; name=\"user\"; filename=\"pmanager.pm\"").as_str(),
-            )
-            .unwrap(),
-        )
-        .body(body)?;
-    Ok(response)
+    let mut headers = HeaderMap::with_capacity(2);
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/vnd.sqlite3"));
+    headers.insert(CONTENT_DISPOSITION, HeaderValue::from_str(format!("form-data; name=\"user\"; filename=\"pmanager.pm\"").as_str()).unwrap());
+
+    Ok((headers, body).into_response())
 }
