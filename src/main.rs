@@ -49,7 +49,7 @@ async fn main() {
     let mysql_pool = get_pool(&connection_str).await;
 
     let static_provider = StaticProvider::new("klewy", "dvfu1312", None);
-    let client = ClientBuilder::new("http://localhost:9000".parse().unwrap())
+    let client = ClientBuilder::new(std::env::var("MINIO_URL").unwrap().parse().unwrap())
         .provider(Some(Box::new(static_provider)))
         .build()
         .unwrap();
