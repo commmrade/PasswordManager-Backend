@@ -1,5 +1,6 @@
 use std::{fs::OpenOptions, io::Write};
 
+use anyhow::anyhow;
 use axum::{
     extract::{Multipart, State},
     http::{
@@ -16,8 +17,9 @@ const STORAGE_FILENAME: &str = "pmanager.pm";
 const PASSWORD_FILENAME: &str = "password.txt";
 
 use crate::{
-    controllers::userdb,
-    crypt::{encryption, token},
+    common::error::AppError,
+    controllers,
+    crypt::{encryption, token::AuthHeader},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -28,138 +30,80 @@ pub struct UploadReq {
 #[axum::debug_handler]
 pub async fn upload(
     State(pool): State<MySqlPool>,
+    auth_header: AuthHeader,
     headers: HeaderMap,
     mut multipart: Multipart,
-) -> Result<Response, Response> {
-    let empty = HeaderValue::from_str("").unwrap();
-    let token = headers
-        .get("Authorization")
-        .unwrap_or(&empty)
-        .to_str()
-        .unwrap()
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or("");
+) -> Result<Response, AppError> {
     let password_of_storage = headers
         .get("Password")
-        .unwrap_or(&empty)
+        .ok_or(anyhow!("fuck"))?
         .to_str()
         .expect("Password not set");
+    let user_id = auth_header.claims.id;
 
-    let user_id = match token::verify_jwt_token(token) {
-        Ok(id) => id,
-        Err(why) => {
-            eprintln!("Error {}", why);
-            return Err((StatusCode::UNAUTHORIZED, "Token was not verified").into_response());
-        }
-    };
-
-    while let Some(mut field) = multipart.next_field().await.unwrap() {
+    while let Some(mut field) = multipart.next_field().await? {
         let dir_name = user_id.to_string();
 
         let path = std::path::Path::new(&dir_name);
         if !path.exists() {
-            std::fs::create_dir(&dir_name).unwrap();
+            std::fs::create_dir(&dir_name)?;
         }
         let full_path = dir_name.to_string() + "/" + STORAGE_FILENAME;
-        let mut file = match OpenOptions::new()
+
+        let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(full_path)
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Server error. Couldnt upload",
-                )
-            }) {
-            Ok(file) => file,
-            Err(why) => return Err(why.into_response()),
-        };
+            .open(full_path)?;
 
-        while let Some(chunk) = field
-            .chunk()
-            .await
-            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())?
-        {
-            file.write(&chunk).unwrap();
+        while let Some(chunk) = field.chunk().await? {
+            file.write(&chunk)?;
         }
-        file.flush().unwrap();
+        file.flush()?;
     }
+
     let full_path = user_id.to_string() + "/" + PASSWORD_FILENAME;
-    let mut file = match OpenOptions::new()
+    let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(full_path)
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Server error. Couldnt upload",
-            )
-        }) {
-        Ok(file) => file,
-        Err(why) => return Err(why.into_response()),
-    };
+        .open(full_path)?;
 
     // TODO: Make it safer
-    let encrypted = encryption::aes_encrypt_text(password_of_storage).unwrap();
-    userdb::set_nonce(&pool, &encrypted.1, user_id)
-        .await
-        .unwrap();
+    let encrypted = encryption::aes_encrypt_text(password_of_storage)?;
+    controllers::users::set_nonce(&pool, &encrypted.1, user_id).await?;
 
-    file.write(encrypted.0.as_slice()).unwrap();
-    file.flush().unwrap();
+    file.write(encrypted.0.as_slice())?;
+    file.flush()?;
 
-    Ok((StatusCode::OK, "Successfully uploaded storage").into_response())
+    Ok((StatusCode::OK).into_response())
 }
 
 pub async fn download(
     State(pool): State<MySqlPool>,
-    headers: HeaderMap,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let empty = HeaderValue::from_str("").unwrap();
-
-    let token = headers
-        .get("Authorization")
-        .unwrap_or(&empty)
-        .to_str()
-        .unwrap()
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or("");
-    let user_id = match token::verify_jwt_token(token) {
-        Ok(id) => id,
-        Err(why) => {
-            eprintln!("Error {}", why);
-            return Err((StatusCode::UNAUTHORIZED, "Token was not verified".into()));
-        }
-    };
+    auth_header: AuthHeader,
+) -> Result<Response, AppError> {
+    let user_id = auth_header.claims.id;
 
     let path = user_id.to_string() + "/" + PASSWORD_FILENAME;
-    let mut file = match tokio::fs::File::open(path).await {
-        Ok(file) => file,
-        Err(why) => return Err((StatusCode::NOT_FOUND, why.to_string())),
-    };
+    let mut file = tokio::fs::File::open(path).await?;
+
     let mut raw_password_str = Vec::new();
-    file.read_to_end(&mut raw_password_str).await.unwrap();
+    file.read_to_end(&mut raw_password_str).await?;
 
-    let nonce = userdb::nonce(&pool, user_id).await.unwrap(); // Must exist because user at this point is there
-    let password_str = encryption::aes_decrypt_text(&raw_password_str, &nonce).unwrap();
+    let nonce = controllers::users::get_nonce(&pool, user_id).await?; // Must exist because user at this point is there
+    let password_str = encryption::aes_decrypt_text(&raw_password_str, &nonce)?;
 
-    file.flush().await.unwrap();
+    file.flush().await?;
     drop(file);
 
     let path = user_id.to_string() + "/" + STORAGE_FILENAME;
-    let file = match tokio::fs::File::open(path).await {
-        Ok(file) => file,
-        Err(why) => return Err((StatusCode::NOT_FOUND, why.to_string())),
-    };
+    let file = tokio::fs::File::open(path).await?;
 
     let stream = tokio_util::io::ReaderStream::with_capacity(file, 4096);
     let stream_body = axum::body::Body::from_stream(stream);
 
-    Ok(axum::response::Response::builder()
+    let response = axum::response::Response::builder()
         .header(
             CONTENT_TYPE,
             HeaderValue::from_str("application/vnd.sqlite3").unwrap(),
@@ -172,6 +116,6 @@ pub async fn download(
             .unwrap(),
         )
         .header("Password", HeaderValue::from_str(&password_str).unwrap())
-        .body(stream_body)
-        .unwrap())
+        .body(stream_body)?;
+    Ok(response)
 }

@@ -1,41 +1,30 @@
 use std::time::Duration;
 
-use axum::{
-    extract::DefaultBodyLimit,
-    routing::{get, post},
-    Router,
-};
-use handlers::auth;
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
 
-pub mod controllers;
-pub mod crypt;
-pub mod handlers;
+mod common;
+mod controllers;
+mod crypt;
+mod database;
+mod handlers;
+
+async fn get_pool(connection_str: &str) -> MySqlPool {
+    MySqlPoolOptions::new()
+        .max_connections(10)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(connection_str)
+        .await
+        .expect("Cant connect")
+}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
     dotenv::dotenv().ok();
 
-    let connect_str = "mysql://klewy:root@localhost:3306/pm";
-
-    let mysql_pool = MySqlPoolOptions::new()
-        .max_connections(10)
-        .acquire_timeout(Duration::from_secs(10))
-        .connect(connect_str)
-        .await
-        .expect("Cant connect");
-
-    let app = Router::new()
-        .route("/register", post(handlers::auth::register))
-        .route("/login", post(handlers::auth::login))
-        .route("/token", get(handlers::auth::token))
-        .route("/download", get(handlers::storage::download))
-        .route("/upload", post(handlers::storage::upload))
-        .route("/validate", get(handlers::auth::validate))
-        .route("/logout", post(auth::logout))
-        .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024 * 2))
-        .with_state(mysql_pool);
+    let connection_str = std::env::var("DATABASE_URL").expect("DATABASE_URL NOT SET");
+    let mysql_pool = get_pool(&connection_str).await;
+    let app = common::router::get_router(mysql_pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
