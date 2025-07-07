@@ -44,9 +44,6 @@ pub async fn upload(
         .get("Password")
         .unwrap_or(&empty)
         .to_str()
-        .unwrap()
-        .split_whitespace()
-        .nth(1)
         .expect("Password not set");
 
     let user_id = match token::verify_jwt_token(token) {
@@ -131,7 +128,6 @@ pub async fn download(
         .split_whitespace()
         .nth(1)
         .unwrap_or("");
-    println!("down");
     let user_id = match token::verify_jwt_token(token) {
         Ok(id) => id,
         Err(why) => {
@@ -139,7 +135,6 @@ pub async fn download(
             return Err((StatusCode::UNAUTHORIZED, "Token was not verified".into()));
         }
     };
-    println!("past");
 
     let path = user_id.to_string() + "/" + PASSWORD_FILENAME;
     let mut file = match tokio::fs::File::open(path).await {
