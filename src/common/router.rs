@@ -14,10 +14,10 @@ use crate::{
         error::{internal_server_error_handler, ErrorResponse, ErrorTypes},
         swagger::ApiDoc,
     },
-    handlers,
+    handlers, AppState,
 };
 
-fn auth_routes() -> Router<Pool<MySql>> {
+fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/register", axum::routing::post(handlers::auth::register))
         .route("/login", axum::routing::post(handlers::auth::login))
@@ -29,13 +29,13 @@ fn auth_routes() -> Router<Pool<MySql>> {
         .route("/logout", axum::routing::post(handlers::auth::logout))
 }
 
-fn storage_routes() -> Router<MySqlPool> {
+fn storage_routes() -> Router<AppState> {
     Router::new()
         .route("/download", axum::routing::get(handlers::storage::download))
         .route("/upload", axum::routing::post(handlers::storage::upload))
 }
 
-pub fn get_router(state: Pool<MySql>) -> Router {
+pub fn get_router(state: AppState) -> Router {
     Router::new()
         .merge(auth_routes())
         .merge(storage_routes())

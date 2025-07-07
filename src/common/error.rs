@@ -55,6 +55,7 @@ pub enum ErrorTypes {
     RefreshTokenExpired,
     InvalidCreds,
     NoAuthHeader,
+    FileNotExists,
 }
 
 impl ErrorTypes {
@@ -70,6 +71,7 @@ impl ErrorTypes {
             ErrorTypes::RefreshTokenExpired => "refresh_token_expired",
             ErrorTypes::InvalidCreds => "invalid_creds",
             ErrorTypes::NoAuthHeader => "no_auth_header",
+            ErrorTypes::FileNotExists => "file_not_exists",
         }
     }
 }

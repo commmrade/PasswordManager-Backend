@@ -8,12 +8,21 @@ use axum::{
     },
     response::{IntoResponse, Response},
 };
+use minio::s3::{
+    builders::ObjectContent,
+    types::{PartInfo, S3Api},
+};
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
+use tokio_util::io::ReaderStream;
 
 const STORAGE_FILENAME: &str = "pmanager.pm";
 
-use crate::{common::error::AppError, crypt::token::AuthHeader};
+use crate::{
+    common::error::{error_response, AppError, ErrorTypes},
+    crypt::token::AuthHeader,
+    AppState,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct UploadReq {
@@ -21,47 +30,80 @@ pub struct UploadReq {
 }
 
 pub async fn upload(
-    State(_): State<MySqlPool>,
+    State(s3_client): State<minio::s3::Client>,
     auth_header: AuthHeader,
     mut multipart: Multipart,
 ) -> Result<Response, AppError> {
     let user_id = auth_header.claims.id;
 
+    let filename = user_id.to_string() + "/pmanager.pm";
+
     while let Some(mut field) = multipart.next_field().await? {
-        let dir_name = user_id.to_string();
-
-        let path = std::path::Path::new(&dir_name);
-        if !path.exists() {
-            std::fs::create_dir(&dir_name)?;
-        }
-        let full_path = dir_name.to_string() + "/" + STORAGE_FILENAME;
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(full_path)?;
+        let multipart_upload = s3_client
+            .create_multipart_upload("user-storages", &filename)
+            .send()
+            .await?;
+        let mut parts: Vec<minio::s3::types::PartInfo> = Vec::new();
 
         while let Some(chunk) = field.chunk().await? {
-            file.write(&chunk)?;
+            let response: minio::s3::response::UploadPartResponse = s3_client
+                .upload_part(
+                    &multipart_upload.bucket,
+                    &multipart_upload.object,
+                    &multipart_upload.upload_id,
+                    (parts.len() + 1) as u16, // Indexing of parts start at 1
+                    chunk.clone().into(),
+                )
+                .send()
+                .await?;
+
+            let partinfo = PartInfo {
+                number: (parts.len() + 1) as u16,
+                etag: response.etag,
+                size: chunk.len() as u64,
+            };
+            parts.push(partinfo);
         }
-        file.flush()?;
+        let _: minio::s3::response::CompleteMultipartUploadResponse = s3_client
+            .complete_multipart_upload(
+                "user-storages",
+                &filename,
+                multipart_upload.upload_id,
+                parts,
+            )
+            .send()
+            .await?;
     }
 
     Ok((StatusCode::OK).into_response())
 }
 
 pub async fn download(
-    State(_): State<MySqlPool>,
+    State(s3_client): State<minio::s3::Client>,
     auth_header: AuthHeader,
 ) -> Result<Response, AppError> {
     let user_id = auth_header.claims.id;
 
-    let path = user_id.to_string() + "/" + STORAGE_FILENAME;
-    let file = tokio::fs::File::open(path).await?;
+    let filename = user_id.to_string() + "/pmanager.pm";
+    let response = match s3_client
+        .get_object("user-storages", &filename)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(why) => {
+            tracing::error!("Such file does not exist");
+            return Ok(crate::error_response!(
+                StatusCode::NOT_FOUND,
+                ErrorTypes::FileNotExists,
+                "Such file does not exist: {}",
+                why
+            ));
+        }
+    };
 
-    let stream = tokio_util::io::ReaderStream::with_capacity(file, 4096);
-    let stream_body = axum::body::Body::from_stream(stream);
+    let (stream, _size) = response.content.to_stream().await?;
+    let body = axum::body::Body::from_stream(stream);
 
     let response = axum::response::Response::builder()
         .header(
@@ -75,6 +117,6 @@ pub async fn download(
             )
             .unwrap(),
         )
-        .body(stream_body)?;
+        .body(body)?;
     Ok(response)
 }
