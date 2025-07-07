@@ -44,7 +44,7 @@ impl FromRef<AppState> for minio::s3::Client {
 async fn main() {
     tracing_subscriber::fmt::init();
     dotenv::dotenv().ok();
-
+    tracing::info!("started");
     let connection_str = std::env::var("DATABASE_URL").expect("DATABASE_URL NOT SET");
     let mysql_pool = get_pool(&connection_str).await;
 
@@ -61,7 +61,7 @@ async fn main() {
 
     let app = common::router::get_router(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
     axum::serve(listener, app).await.unwrap();
     println!("Hello, world!");
 }

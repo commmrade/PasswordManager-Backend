@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  password-manager-backend:
+    extra_hosts:
+      - "host.docker.internal:37.252.19.1"
+    image: site-orgs
+    ports:
+      - "8080:8080"
+    environment:
+      # Добавь свои переменные окружения сюда
+      # Пример:
+      - AES_KEY=E8E1j5MlLA42EEN10Rp6LUMly6Ew3PxF
+      - SECRET_WORD_JWT=V87B6kdRsbU09P0n492Afsw4MhZkOuWJ
+      - SECRET_WORD_REFRESH=Af72D5TDihebB3FJv5irc4JVWvqdffP8
+      - DATABASE_URL=mysql://root:root@172.17.255.255:3306/pm
