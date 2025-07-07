@@ -21,13 +21,3 @@ pub async fn get_password_hash(state: &MySqlPool, id: u32) -> anyhow::Result<Str
     let pwd_hash = database::users::get_password_hash(state, id).await?;
     Ok(pwd_hash)
 }
-
-pub async fn set_nonce(state: &MySqlPool, nonce: &[u8], id: u32) -> anyhow::Result<()> {
-    database::users::set_nonce(state, nonce, id).await?;
-    Ok(())
-}
-
-pub async fn get_nonce(state: &MySqlPool, id: u32) -> anyhow::Result<Vec<u8>> {
-    let nonce = database::users::nonce(state, id).await?;
-    Ok(nonce)
-}

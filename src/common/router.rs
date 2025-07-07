@@ -27,7 +27,6 @@ fn auth_routes() -> Router<Pool<MySql>> {
         )
         .route("/validate", axum::routing::get(handlers::auth::validate))
         .route("/logout", axum::routing::post(handlers::auth::logout))
-        .route("/download", axum::routing::get(handlers::storage::download))
 }
 
 fn storage_routes() -> Router<MySqlPool> {
