@@ -1,16 +1,61 @@
-version: "3.8"
+version: '3.9'
+
+networks:
+  app-network:
 
 services:
+  mariadb:
+    image: mariadb:11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: pm
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    networks:
+      - app-network
+
   password-manager-backend:
-    extra_hosts:
-      - "host.docker.internal:37.252.19.1"
-    image: site-orgs
+    image: password-manager-backend
+    container_name: password-manager-backend
     ports:
       - "8080:8080"
     environment:
-      # Добавь свои переменные окружения сюда
-      # Пример:
-      - AES_KEY=E8E1j5MlLA42EEN10Rp6LUMly6Ew3PxF
-      - SECRET_WORD_JWT=V87B6kdRsbU09P0n492Afsw4MhZkOuWJ
-      - SECRET_WORD_REFRESH=Af72D5TDihebB3FJv5irc4JVWvqdffP8
-      - DATABASE_URL=mysql://root:root@172.17.255.255:3306/pm
+      AES_KEY: E8E1j5MlLA42EEN10Rp6LUMly6Ew3PxF
+      SECRET_WORD_JWT: V87B6kdRsbU09P0n492Afsw4MhZkOuWJ
+      SECRET_WORD_REFRESH: Af72D5TDihebB3FJv5irc4JVWvqdffP8
+      DATABASE_URL: mysql://root:root@mariadb:3306/pm
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: user
+      MINIO_ROOT_PASSWORD: password
+      SERVICE_URL=0.0.0.0:8080
+    networks:
+      - app-network
+
+  minio:
+    image: minio/minio:latest
+    command: server --console-address ":9001" /data/
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: user
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - minio-storage:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  mariadb-data:
+  minio-storage:

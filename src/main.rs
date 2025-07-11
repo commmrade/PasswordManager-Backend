@@ -48,7 +48,7 @@ async fn main() {
     let connection_str = std::env::var("DATABASE_URL").expect("DATABASE_URL NOT SET");
     let mysql_pool = get_pool(&connection_str).await;
 
-    let static_provider = StaticProvider::new("klewy", "dvfu1312", None);
+    let static_provider = StaticProvider::new(&std::env::var("MINIO_ROOT_USER").unwrap(), &std::env::var("MINIO_ROOT_PASSWORD").unwrap(), None);
     let client = ClientBuilder::new(std::env::var("MINIO_URL").unwrap().parse().unwrap())
         .provider(Some(Box::new(static_provider)))
         .build()
@@ -61,7 +61,7 @@ async fn main() {
 
     let app = common::router::get_router(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(std::env::var("SERVICE_URL").unwrap()).await.unwrap();
     axum::serve(listener, app).await.unwrap();
     println!("Hello, world!");
 }
